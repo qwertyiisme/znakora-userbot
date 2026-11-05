@@ -92,47 +92,74 @@ def _login(bot, email, password, name, scopes, chat_ids):
             raise
 
 
-def main():
+def _ask_creds():
     creds = load_creds()
-    first = not creds
+    had_saved = bool(creds)
     email = os.environ.get("ZNAKORA_EMAIL") or creds.get("email") or input("Email: ")
     password = os.environ.get("ZNAKORA_PASSWORD") or creds.get("password") or getpass.getpass("Пароль: ")
-    if first:
-        save_creds(email, password)
-        print(f"Данные входа сохранены в {CRED_FILE} (не публикуйте этот файл).")
+    return email, password, had_saved
 
-    chat_ids_current = load_ids()
 
-    if not chat_ids_current:
-        print("Первый запуск: поиск чатов (нужен код запуска).")
-        with Client() as bot:
-            _login(bot, email, password, "nyra-discovery", scopes=["chats.list"], chat_ids=[])
-            discover_ids(bot)
+def _wipe_creds():
+    try:
+        os.remove(CRED_FILE)
+        print("[nyra] сохранённые данные входа удалены, повторите ввод")
+    except OSError:
+        pass
+
+
+def main():
+    from znakora_userbot import UserbotError
+
+    while True:
         chat_ids_current = load_ids()
-
-    print("Запуск nyra.")
-    CFG.load()
-    with Client() as bot:
-        _login(bot, email, password, BOT_NAME,
-               scopes=["chats.list", "events.read", "messages.edit", "messages.send", "files.write"],
-               chat_ids=chat_ids_current)
-
-        threading.Thread(target=_refresh, args=(bot,), daemon=True).start()
-
-        base = os.path.dirname(os.path.abspath(__file__))
-        registry = CommandRegistry()
-        mod_loader = ModLoader(bot, os.path.join(base, "modules"), registry)
-        sys_loader = ModLoader(bot, os.path.join(base, "systemmodules"), registry)
-        context = Ctx(bot, registry, mod_loader, sys_loader)
-        mod_loader.ctx = context
-        sys_loader.ctx = context
-
-        sys_loader.load_all()
-        mod_loader.load_all()
+        email, password, had_saved = _ask_creds()
         try:
-            bot.run(include_own=True)
-        except KeyboardInterrupt:
-            bot.stop()
+            if not chat_ids_current:
+                print("Первый запуск: поиск чатов (нужен код запуска).")
+                with Client() as bot:
+                    _login(bot, email, password, "nyra-discovery", scopes=["chats.list"], chat_ids=[])
+                    discover_ids(bot)
+                chat_ids_current = load_ids()
+
+            print("Запуск nyra.")
+            CFG.load()
+            with Client() as bot:
+                _login(bot, email, password, BOT_NAME,
+                       scopes=["chats.list", "events.read", "messages.edit", "messages.send", "files.write"],
+                       chat_ids=chat_ids_current)
+
+                if not had_saved:
+                    save_creds(email, password)
+                    print(f"Данные входа сохранены в {CRED_FILE} (не публикуйте этот файл).")
+
+                threading.Thread(target=_refresh, args=(bot,), daemon=True).start()
+
+                base = os.path.dirname(os.path.abspath(__file__))
+                registry = CommandRegistry()
+                mod_loader = ModLoader(bot, os.path.join(base, "modules"), registry)
+                sys_loader = ModLoader(bot, os.path.join(base, "systemmodules"), registry)
+                context = Ctx(bot, registry, mod_loader, sys_loader)
+                mod_loader.ctx = context
+                sys_loader.ctx = context
+
+                sys_loader.load_all()
+                mod_loader.load_all()
+                try:
+                    bot.run(include_own=True)
+                    return
+                except KeyboardInterrupt:
+                    bot.stop()
+                    return
+        except UserbotError as e:
+            bad_creds = getattr(e, "status", 0) == 401
+            if bad_creds and not os.environ.get("ZNAKORA_PASSWORD"):
+                if had_saved:
+                    _wipe_creds()
+                    continue
+                print("[nyra] неверные данные входа, повторите")
+                continue
+            raise
 
 
 if __name__ == "__main__":
