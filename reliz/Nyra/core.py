@@ -80,8 +80,16 @@ def _login(bot, email, password, name, scopes, chat_ids):
     persist = _persistence_supported()
     if not persist:
         print(f"[nyra] сохранение сессий недоступно, вхожу разово ({name})")
-    bot.login(email, password, name=name, scopes=scopes, chat_ids=chat_ids,
-              persist_session=persist)
+    try:
+        bot.login(email, password, name=name, scopes=scopes, chat_ids=chat_ids,
+                  persist_session=persist)
+    except Exception as e:
+        if getattr(e, "code", "") == "PERSISTENCE_NOT_SUPPORTED":
+            print(f"[nyra] сервер отклонил persist, вхожу разово ({name})")
+            bot.login(email, password, name=name, scopes=scopes, chat_ids=chat_ids,
+                      persist_session=False)
+        else:
+            raise
 
 
 def main():
