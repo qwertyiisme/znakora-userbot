@@ -62,16 +62,26 @@ def _refresh(bot):
         print("Не удалось обновить список чатов (кэш остался прежним):", e)
 
 
-def _login(bot, email, password, name, scopes, chat_ids):
+CAP_URL = os.environ.get("ZNAKORA_CAPABILITIES_URL", "https://www.znakora.ru/api/userbots/v1/capabilities")
+
+
+def _persistence_supported():
     try:
-        bot.login(email, password, name=name, scopes=scopes, chat_ids=chat_ids)
+        import json
+        import urllib.request
+        with urllib.request.urlopen(CAP_URL, timeout=10) as r:
+            return bool(json.load(r).get("persistence_supported"))
     except Exception as e:
-        if getattr(e, "code", "") == "PERSISTENCE_NOT_SUPPORTED":
-            print(f"[nyra] сервер пока не поддерживает сохранение сессий, вхожу разово ({name})")
-            bot.login(email, password, name=name, scopes=scopes, chat_ids=chat_ids,
-                      persist_session=False)
-        else:
-            raise
+        print("[nyra] не удалось узнать возможности сервера:", e)
+        return False
+
+
+def _login(bot, email, password, name, scopes, chat_ids):
+    persist = _persistence_supported()
+    if not persist:
+        print(f"[nyra] сохранение сессий недоступно, вхожу разово ({name})")
+    bot.login(email, password, name=name, scopes=scopes, chat_ids=chat_ids,
+              persist_session=persist)
 
 
 def main():
