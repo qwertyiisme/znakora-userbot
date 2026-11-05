@@ -8,11 +8,10 @@ def _commands_text(registry):
         groups.setdefault(item["module"], []).append((name, item["help"] or ""))
     lines = []
     for module in sorted(groups):
-        lines.append(f"{module}:")
+        lines.append(f"## {module}")
         for name, h in groups[module]:
             lines.append(f"  {name} — {h}")
-        lines.append("")
-    return "\n".join(lines).rstrip("\n")
+    return "\n".join(lines)
 
 
 def setup(bot, router, loader):

@@ -126,7 +126,8 @@ def main():
             CFG.load()
             with Client() as bot:
                 _login(bot, email, password, BOT_NAME,
-                       scopes=["chats.list", "events.read", "messages.edit", "messages.send", "files.write"],
+                       scopes=["chats.list", "events.read", "messages.edit", "messages.send",
+                               "messages.delete", "files.write"],
                        chat_ids=chat_ids_current)
 
                 if not had_saved:
