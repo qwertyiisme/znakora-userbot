@@ -54,21 +54,6 @@ python3 -m venv .venv
 | `.reload sys` / `all` | Перезагрузить системные / всё |
 | `.restart` | Полный перезапуск |
 
-## Свои модули
-
-Файл в `Nyra/modules/<имя>.py` с функцией `setup(bot, router, loader)`:
-
-```python
-def setup(bot, router, loader):
-    cfg = CFG.scoped("<имя>")          # свой скоуп конфига
-    cfg.default("VAR", "", desc="описание", secret=False)
-
-    @router.command(".cmd", help="описание")
-    def cmd(message):
-        bot.call("edit_message", chat_id=message["chat_id"],
-                 message_id=message["id"], text="готово")
-```
-
 ## Безопасность
 
 - В репозитории только система; модули и секреты не коммитить
