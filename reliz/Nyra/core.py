@@ -62,6 +62,18 @@ def _refresh(bot):
         print("Не удалось обновить список чатов (кэш остался прежним):", e)
 
 
+def _login(bot, email, password, name, scopes, chat_ids):
+    try:
+        bot.login(email, password, name=name, scopes=scopes, chat_ids=chat_ids)
+    except Exception as e:
+        if getattr(e, "code", "") == "PERSISTENCE_NOT_SUPPORTED":
+            print(f"[nyra] сервер пока не поддерживает сохранение сессий, вхожу разово ({name})")
+            bot.login(email, password, name=name, scopes=scopes, chat_ids=chat_ids,
+                      persist_session=False)
+        else:
+            raise
+
+
 def main():
     creds = load_creds()
     first = not creds
@@ -76,16 +88,16 @@ def main():
     if not chat_ids_current:
         print("Первый запуск: поиск чатов (нужен код запуска).")
         with Client() as bot:
-            bot.login(email, password, name="nyra-discovery", scopes=["chats.list"], chat_ids=[])
+            _login(bot, email, password, "nyra-discovery", scopes=["chats.list"], chat_ids=[])
             discover_ids(bot)
         chat_ids_current = load_ids()
 
     print("Запуск nyra.")
     CFG.load()
     with Client() as bot:
-        bot.login(email, password, name=BOT_NAME,
-                  scopes=["chats.list", "events.read", "messages.edit", "messages.send", "files.write"],
-                  chat_ids=chat_ids_current)
+        _login(bot, email, password, BOT_NAME,
+               scopes=["chats.list", "events.read", "messages.edit", "messages.send", "files.write"],
+               chat_ids=chat_ids_current)
 
         threading.Thread(target=_refresh, args=(bot,), daemon=True).start()
 
