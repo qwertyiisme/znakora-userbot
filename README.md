@@ -68,8 +68,3 @@ def setup(bot, router, loader):
         bot.call("edit_message", chat_id=message["chat_id"],
                  message_id=message["id"], text="готово")
 ```
-
-## Безопасность
-
-- В репозитории только система; модули и секреты не коммитить
-- `~/.config/znakora/nyra.json` (доступ), `nyra.cfgkey` (ключ шифрования), `Nyra/.cfg.json` (конфиг) — локальные файлы, не публиковать
