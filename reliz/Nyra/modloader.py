@@ -76,6 +76,17 @@ class ScopedCfg:
         return sorted(set(self.defaults) | set(self.enc))
 
 
+class _RootView:
+    def __init__(self, store):
+        self.store = store
+
+    def modules(self):
+        return sorted(self.store.scopes)
+
+    def scope(self, module):
+        return self.store._scope(module)
+
+
 class CfgStore:
     def __init__(self, key_path=None, data_path=None):
         base = os.path.join(os.path.expanduser("~"), ".config", "znakora")
@@ -84,7 +95,10 @@ class CfgStore:
             os.path.dirname(os.path.abspath(__file__)), ".cfg.json")
         self.master = self._load_master()
         self.scopes = {}
-        self.common = self.scoped("common")
+        self._stored = {}
+        self._allow = None      # какой модуль сейчас грузится — ему разрешён its scoped()
+        self._trusted_now = False  # True лишь при загрузке системного модуля
+        self.common = self._scope("common")
 
     # старый API модулей, не перешедших на скоупы: общий namespace "common"
     def get(self, key, default=None):
@@ -93,10 +107,27 @@ class CfgStore:
     def set(self, key, value):
         return self.common.set(key, value)
 
+    def _scope(self, module):
+        scope = self.scopes.get(module)
+        if scope is None:
+            scope = ScopedCfg(self, module)
+            self.scopes[module] = scope
+            stashed = self._stored.pop(module, None)
+            if stashed:
+                scope.enc.update(stashed)
+        return scope
+
     def scoped(self, module):
-        if module not in self.scopes:
-            self.scopes[module] = ScopedCfg(self, module)
-        return self.scopes[module]
+        if module != "common" and module != self._allow:
+            raise PermissionError(
+                f"модуль {module!r} недоступен (грузится {self._allow!r}): "
+                "модулю разрешён только свой раздел конфига")
+        return self._scope(module)
+
+    def root(self):
+        if not self._trusted_now:
+            raise PermissionError("полный доступ к конфигу есть только у системных модулей")
+        return _RootView(self)
 
     def _fernet_for(self, module):
         digest = hashlib.sha256()
@@ -130,20 +161,14 @@ class CfgStore:
             print("[cfg] файл конфигурации повреждён:", e)
             return
         mods = data.get("modules", {})
-        broken = []
         for mod, sec in mods.items():
-            scope = self.scoped(mod)
-            for var, enc in (sec or {}).items():
-                try:
-                    scope.fernet.decrypt(enc.encode())
-                    scope.enc[var] = enc
-                except (InvalidToken, ValueError):
-                    broken.append(f"{mod}.{var}")
-        if broken:
-            print("[cfg] не расшифровано:", ", ".join(broken))
+            if isinstance(sec, dict):
+                self._stored[mod] = dict(sec)
 
     def save(self):
         mods = {m: dict(s.enc) for m, s in self.scopes.items()}
+        for m, sec in self._stored.items():
+            mods.setdefault(m, dict(sec))
         payload = json.dumps({"version": 1, "modules": mods}, ensure_ascii=False)
         ddir = os.path.dirname(self.data_path)
         os.makedirs(ddir, exist_ok=True)
@@ -194,12 +219,13 @@ class SafeRouter(Router):
 
 
 class ModLoader:
-    def __init__(self, bot, modules_dir, registry=None):
+    def __init__(self, bot, modules_dir, registry=None, trusted=False):
         self.bot = bot
         self.dir = os.path.abspath(modules_dir)
         os.makedirs(self.dir, exist_ok=True)
         self.registry = registry
         self.loaded = {}
+        self.trusted = trusted
 
     def _pattern_ok(self, name):
         return bool(re.fullmatch(r"[a-z][a-z0-9_]*", name))
@@ -227,13 +253,20 @@ class ModLoader:
         before = list(self.bot._handlers["message"])
         if self.dir not in sys.path:
             sys.path.insert(0, self.dir)
-        spec = importlib.util.spec_from_file_location(f"znakora_mod_{name}", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        router = SafeRouter(self.bot, self.registry, name)
-        setup = getattr(module, "setup", None)
-        if callable(setup):
-            setup(self.bot, router, self)
+        store = CFG
+        store._allow = name
+        store._trusted_now = self.trusted
+        try:
+            spec = importlib.util.spec_from_file_location(f"znakora_mod_{name}", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            router = SafeRouter(self.bot, self.registry, name)
+            setup = getattr(module, "setup", None)
+            if callable(setup):
+                setup(self.bot, router, self)
+        finally:
+            store._allow = None
+            store._trusted_now = False
         after = list(self.bot._handlers["message"])
         delta = [cb for cb in after if cb not in before]
         self.loaded[name] = {"module": module, "router": router, "callback": delta[0] if delta else None}

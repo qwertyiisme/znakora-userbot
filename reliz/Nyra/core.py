@@ -139,7 +139,7 @@ def main():
                 base = os.path.dirname(os.path.abspath(__file__))
                 registry = CommandRegistry()
                 mod_loader = ModLoader(bot, os.path.join(base, "modules"), registry)
-                sys_loader = ModLoader(bot, os.path.join(base, "systemmodules"), registry)
+                sys_loader = ModLoader(bot, os.path.join(base, "systemmodules"), registry, trusted=True)
                 context = Ctx(bot, registry, mod_loader, sys_loader)
                 mod_loader.ctx = context
                 sys_loader.ctx = context

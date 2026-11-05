@@ -10,11 +10,13 @@ def _mask(key, value):
 
 
 def setup(bot, router, loader):
+    root = CFG.root()
+
     @router.command(".acfg", help="показать изменяемые переменные конфигурации")
     def acfg(message):
         lines = []
-        for mod in CFG.modules():
-            scope = CFG.scoped(mod)
+        for mod in root.modules():
+            scope = root.scope(mod)
             section = []
             for var in scope.list_vars():
                 val = scope.get(var, "")
@@ -36,12 +38,12 @@ def setup(bot, router, loader):
             edit(bot, message, ".fcfg <VAR> <VALUE>")
             return
         var, val = parts[1].strip(), parts[2].strip()
-        owners = [m for m in CFG.modules() if var in CFG.scoped(m).list_vars()]
+        owners = [m for m in root.modules() if var in root.scope(m).list_vars()]
         if not owners:
             edit(bot, message, f"❌ Неизвестная переменная: {var}")
             return
         if len(owners) > 1:
             edit(bot, message, f"❌ Переменная есть в нескольких модулях: {', '.join(owners)}. Уточните: .fcfg {owners[0]}/{var} <VALUE>")
             return
-        CFG.scoped(owners[0]).set(var, val)
+        root.scope(owners[0]).set(var, val)
         edit(bot, message, f"✅ {var} = {_mask(var, val)}")
