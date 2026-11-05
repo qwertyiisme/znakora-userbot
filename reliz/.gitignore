@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.chat_ids.json
+.cfg.json
+.yamusic_cache/
+.yt_cache/
+.env
+.venv/
+.idea/
+.vscode/
+.DS_Store

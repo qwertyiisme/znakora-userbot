@@ -1,0 +1,109 @@
+import getpass
+import json
+import os
+import threading
+
+from znakora_userbot import Client
+
+import ctx
+from ctx import BOT_NAME, Ctx, load_ids
+from modloader import CFG, CommandRegistry, ModLoader
+
+MAX_CHATS = 20
+CRED_DIR = os.path.join(os.path.expanduser("~"), ".config", "znakora")
+CRED_FILE = os.path.join(CRED_DIR, "nyra.json")
+
+
+def load_creds():
+    try:
+        with open(CRED_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and data.get("email") and data.get("password"):
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+def save_creds(email, password):
+    os.makedirs(CRED_DIR, mode=0o700, exist_ok=True)
+    with open(CRED_FILE, "w", encoding="utf-8") as f:
+        json.dump({"email": email, "password": password}, f)
+    os.chmod(CRED_FILE, 0o600)
+
+
+def save_ids(ids):
+    with open(ctx.IDS_FILE, "w", encoding="utf-8") as f:
+        json.dump(ids, f)
+
+
+def discover_ids(bot, limit=MAX_CHATS):
+    ids = []
+    before = None
+    while len(ids) < limit:
+        kwargs = {"before": before} if before else {}
+        res = bot.call("discover_chats", **kwargs)
+        for item in res.get("chats") or res.get("items") or []:
+            cid = item.get("id") if isinstance(item, dict) else item
+            if cid and cid not in ids:
+                ids.append(cid)
+        before = res.get("next_before") or res.get("cursor")
+        if not before:
+            break
+    save_ids(ids[:limit])
+    print(f"Список чатов обновлён ({len(ids)}).")
+    return ids
+
+
+def _refresh(bot):
+    try:
+        discover_ids(bot)
+    except Exception as e:
+        print("Не удалось обновить список чатов (кэш остался прежним):", e)
+
+
+def main():
+    creds = load_creds()
+    first = not creds
+    email = os.environ.get("ZNAKORA_EMAIL") or creds.get("email") or input("Email: ")
+    password = os.environ.get("ZNAKORA_PASSWORD") or creds.get("password") or getpass.getpass("Пароль: ")
+    if first:
+        save_creds(email, password)
+        print(f"Данные входа сохранены в {CRED_FILE} (не публикуйте этот файл).")
+
+    chat_ids_current = load_ids()
+
+    if not chat_ids_current:
+        print("Первый запуск: поиск чатов (нужен код запуска).")
+        with Client() as bot:
+            bot.login(email, password, name="nyra-discovery", scopes=["chats.list"], chat_ids=[])
+            discover_ids(bot)
+        chat_ids_current = load_ids()
+
+    print("Запуск nyra.")
+    CFG.load()
+    with Client() as bot:
+        bot.login(email, password, name=BOT_NAME,
+                  scopes=["chats.list", "events.read", "messages.edit", "messages.send", "files.write"],
+                  chat_ids=chat_ids_current)
+
+        threading.Thread(target=_refresh, args=(bot,), daemon=True).start()
+
+        base = os.path.dirname(os.path.abspath(__file__))
+        registry = CommandRegistry()
+        mod_loader = ModLoader(bot, os.path.join(base, "modules"), registry)
+        sys_loader = ModLoader(bot, os.path.join(base, "systemmodules"), registry)
+        context = Ctx(bot, registry, mod_loader, sys_loader)
+        mod_loader.ctx = context
+        sys_loader.ctx = context
+
+        sys_loader.load_all()
+        mod_loader.load_all()
+        try:
+            bot.run(include_own=True)
+        except KeyboardInterrupt:
+            bot.stop()
+
+
+if __name__ == "__main__":
+    main()
