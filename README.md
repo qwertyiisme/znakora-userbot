@@ -29,6 +29,8 @@ Nyra/
 ## Быстрый старт
 
 ```bash
+git clone https://github.com/qwertyiisme/znakora-userbot.git
+cd znakora-userbot
 python3 -m venv .venv
 .venv/bin/python -m pip install https://www.znakora.ru/userbots/python-sdk.zip
 .venv/bin/python Nyra/core.py
