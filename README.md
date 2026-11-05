@@ -24,9 +24,7 @@ Nyra/
     ping.py      — .ping
     ubinfo.py    — .ubinfo
   modules/       — пользовательские модули
-    yt.py        — .yt: видео с YouTube (сжатие, прокси)
-    yama.py      — .ysearch / .ysearchd: Яндекс.Музыка
-```
+ ```
 
 ## Быстрый старт
 
