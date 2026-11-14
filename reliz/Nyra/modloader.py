@@ -200,7 +200,15 @@ class SafeRouter(Router):
 
     def command(self, name, help=None):
         def decorate(handler):
-            Router.command(self, name)(handler)
+            def match(message):
+                owner = self.owner_id or self.client._owner_id
+                if not owner or message.get("sender", {}).get("id") != owner:
+                    return False
+                text = message.get("text", "")
+                first = text.split(maxsplit=1)[0] if text else ""
+                first = re.sub(r"^\.(\s+)", ".", first, count=1)
+                return first == name
+            self.rules.append((match, handler))
             if self.registry is not None:
                 self.registry.add(name, help or getattr(handler, "__doc__", None), module=self.name)
             return handler
@@ -209,6 +217,9 @@ class SafeRouter(Router):
     def dispatch(self, message):
         if message.get("automated") or message.get("unavailable"):
             return
+        text = message.get("text") or ""
+        if text.startswith("."):
+            message["text"] = re.sub(r"^\.\s+", ".", text, count=1)
         for predicate, handler in list(self.rules):
             if predicate(message):
                 try:

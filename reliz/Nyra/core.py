@@ -2,6 +2,7 @@ import getpass
 import json
 import os
 import threading
+import time
 
 from znakora_userbot import Client
 
@@ -129,6 +130,25 @@ def main():
                        scopes=["chats.list", "events.read", "messages.edit", "messages.send",
                                "messages.delete", "files.write"],
                        chat_ids=chat_ids_current)
+
+                # Проверка маркера перезапуска
+                marker_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".restart_marker.json")
+                if os.path.exists(marker_path):
+                    try:
+                        with open(marker_path) as f:
+                            marker = json.load(f)
+                        delta = time.time() - marker["timestamp"]
+                        if delta < 1:
+                            text = f"✅ Перезагрузка заняла {int(delta * 1000)} мс"
+                        else:
+                            text = f"✅ Перезагрузка заняла {delta:.2f} сек"
+                        bot.call("edit_message", chat_id=marker["chat_id"], message_id=marker["message_id"], text=text)
+                    except Exception:
+                        pass
+                    try:
+                        os.remove(marker_path)
+                    except OSError:
+                        pass
 
                 if not had_saved:
                     save_creds(email, password)

@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import time
+import tempfile
 
 BOT_NAME = "nyra"
 CREATOR = "@qwertyiisme"
@@ -39,13 +40,26 @@ def fmt_uptime(seconds):
     return " ".join(parts)
 
 
-def restart(bot=None):
+def restart(bot=None, message=None):
+    start_time = time.time()
+
+    if message is not None:
+        marker = {
+            "timestamp": start_time,
+            "chat_id": message["chat_id"],
+            "message_id": message["id"]
+        }
+        marker_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".restart_marker.json")
+        with open(marker_path, "w") as f:
+            json.dump(marker, f)
+
     if bot is not None:
         try:
             bot.close()
             print("[nyra] сессия закрыта")
         except Exception as e:
             print("[nyra] не удалось корректно закрыть сессию:", e)
+
     core = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core.py")
     os.execv(sys.executable, [sys.executable, core, *sys.argv[1:]])
 

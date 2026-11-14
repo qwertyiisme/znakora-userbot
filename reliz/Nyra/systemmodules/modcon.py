@@ -75,5 +75,8 @@ def setup(bot, router, loader):
 
     @router.command(".restart", help="закрыть сессию и полностью перезапустить nyra")
     def restart_cmd(message):
-        edit(bot, message, "🔁 Перезапускаюсь…")
-        threading.Thread(target=restart, args=(bot,), daemon=True).start()
+        try:
+            edit(bot, message, "🔁 Перезапускаюсь…")
+        except Exception:
+            pass  # если не получилось отредактировать — не страшно
+        threading.Thread(target=restart, args=(bot, message), daemon=True).start()
